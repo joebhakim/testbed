@@ -137,22 +137,26 @@ def run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs=128, n_epochs=5
         val_auc = roc_auc_score(y_val.view(-1).detach().numpy(), val_preds.view(-1).detach().numpy())
 
 
-def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs=128, n_epochs=50):
+def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs=128, n_epochs=250, n_epochs_pretrain=500, tf=None, tg=None):
 
-    tf = temp_layer_f()
-    tg = temp_layer_g()
+    if tf == None or tg == None:
+        tf = temp_layer_f()
+        tg = temp_layer_g()
 
-    run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs=bs, n_epochs=n_epochs)
+        run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs=bs, n_epochs=n_epochs_pretrain)
 
     nbatches = int(x_train.shape[0]/bs)+1
 
     th_iter = temp_layer_h_gumbo(K=K)
     optimizer = torch.optim.Adam(
-        [{'params': tf.parameters()},
-        {'params': tg.parameters()},
-        {'params': th_iter.parameters()}]
+        [
+            #{'params': tf.parameters()},
+            #{'params': tg.parameters()},
+            {'params': th_iter.parameters()}
+        ]
         , lr=1e-3)
     loss_fn = nn.BCEWithLogitsLoss(reduction='mean')
+    loss_fn_autoencoder = torch.nn.MSELoss()
 
     val_auc = 0.0
     val_auc_squeezed = 0.0
@@ -170,8 +174,8 @@ def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs=128, n_epochs=50)
             yb_preds_squeezed = tg(th_iter(tf(xb)))
 
             optimizer.zero_grad()
-            loss = loss_fn(yb_preds, yb) + loss_fn(yb_preds_squeezed, yb)
-            #loss = loss_fn(yb_preds_squeezed, yb)
+            #loss = loss_fn(yb_preds, yb) + loss_fn(yb_preds_squeezed, yb)
+            loss = loss_fn(yb_preds_squeezed, yb) + loss_fn_autoencoder(th_iter(tf(xb)), tf(xb))
             loss.backward()
             optimizer.step()
             
