@@ -102,7 +102,7 @@ class temp_layer_h_gumbo(nn.Module):
         return x
 
 
-def run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs):
+def run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs=128, n_epochs=50):
     nbatches = int(x_train.shape[0]/bs)+1
 
     optimizer = torch.optim.Adam(
@@ -113,7 +113,7 @@ def run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs):
 
     val_auc = 0.0
 
-    pbar = tqdm.tqdm(range(50))
+    pbar = tqdm.tqdm(range(n_epochs), position=0, leave=True)
     for i in pbar:
         for j in range(nbatches):
             xb = x_train[j*bs:(j+1)*bs]
@@ -137,12 +137,12 @@ def run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs):
         val_auc = roc_auc_score(y_val.view(-1).detach().numpy(), val_preds.view(-1).detach().numpy())
 
 
-def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs):
+def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs=128, n_epochs=50):
 
     tf = temp_layer_f()
     tg = temp_layer_g()
 
-    run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs)
+    run_pretrain_loop(x_train, y_train, x_val, y_val, tf, tg, bs=bs, n_epochs=n_epochs)
 
     nbatches = int(x_train.shape[0]/bs)+1
 
@@ -157,13 +157,10 @@ def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs):
     val_auc = 0.0
     val_auc_squeezed = 0.0
 
+    metrics_record = pd.DataFrame(columns=["loss","auc","val_auc","auc_squeezed","val_auc_squeezed","loss_value_squeezed","val_loss_value_squeezed"],
+                index=np.arange(0, n_epochs), dtype=np.float64)
 
-    n_epochs = 50
-
-    metrics_record = pd.DataFrame(columns=["loss","auc","val_auc","auc_squeezed","val_auc_squeezed"],
-                index=np.arange(0, n_epochs))
-
-    pbar = tqdm.tqdm(range(n_epochs))
+    pbar = tqdm.tqdm(range(n_epochs), position=0, leave=True)
     for i in pbar:
         for j in range(nbatches):
             xb = x_train[j*bs:(j+1)*bs]
@@ -174,6 +171,7 @@ def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs):
 
             optimizer.zero_grad()
             loss = loss_fn(yb_preds, yb) + loss_fn(yb_preds_squeezed, yb)
+            #loss = loss_fn(yb_preds_squeezed, yb)
             loss.backward()
             optimizer.step()
             
@@ -184,6 +182,7 @@ def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs):
                                 yb_preds_squeezed.view(-1).detach().numpy())    
 
             loss_value = loss.detach().double().numpy()
+            loss_value_squeezed = loss_fn(yb_preds_squeezed, yb).detach().double().numpy()
 
             pbar.set_postfix_str("loss = {:1.3f}, auc = {:.2f}, val_auc = {:.2f}, auc_squeezed = {:.2f}, val_auc_squeezed = {:.2f}".format(
                 loss_value,
@@ -198,10 +197,16 @@ def training_loop_iter_K(K, x_train, y_train, x_val, y_val, bs):
         val_auc = roc_auc_score(y_val.view(-1).detach().numpy(), val_preds.view(-1).detach().numpy())
         val_auc_squeezed = roc_auc_score(y_val.view(-1).detach().numpy(), val_preds_squeezed.view(-1).detach().numpy())
 
+        val_loss_value_squeezed = loss_fn(val_preds_squeezed, y_val).detach().double().numpy()
+
         metrics_record.iloc[i] = [loss_value,
                 auc,
                 val_auc,
                 auc_squeezed,
-                val_auc_squeezed]
+                val_auc_squeezed, 
+                loss_value_squeezed,
+                val_loss_value_squeezed]
+    
+    metrics_record['epoch'] = metrics_record.index + 1
 
     return metrics_record
