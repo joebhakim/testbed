@@ -68,16 +68,18 @@ def _forward_impute(x):
 
     return x_imputed
 
-def prepocess_training_data_from_lists(x, t, e, vsize, val_data, random_state):
+def prepocess_training_data_from_lists(x, t, e, vsize=0.2, val_data=None, random_state=563):
     """RNNs require different preprocessing for variable length sequences"""
+
+
+    x = _get_padded_features(x)
+    t = _get_padded_targets(t)
+    e = _get_padded_targets(e)
 
     idx = list(range(x.shape[0]))
     np.random.seed(random_state)
     np.random.shuffle(idx)
 
-    x = _get_padded_features(x)
-    t = _get_padded_targets(t)
-    e = _get_padded_targets(e)
 
     x = _forward_impute(x)
     t = _forward_impute(t)
@@ -150,24 +152,26 @@ class SurvivalClusteringMachine(nn.Module):
                                          for r in range(self.risks)})
 
         self.gate = nn.ModuleDict({str(r+1): nn.Sequential(
-            nn.Linear(lastdim, self.k, bias=False)
+            nn.Linear(hidden*2, self.k, bias=False)
             ) for r in range(self.risks)})
 
         self.scaleg = nn.ModuleDict({str(r+1): nn.Sequential(
-            nn.Linear(lastdim, self.k, bias=True)
+            nn.Linear(hidden*2, self.k, bias=True)
             ) for r in range(self.risks)})
 
         self.shapeg = nn.ModuleDict({str(r+1): nn.Sequential(
-            nn.Linear(lastdim, self.k, bias=True)
+            nn.Linear(hidden*2, self.k, bias=True)
             ) for r in range(self.risks)})
 
 
     def represent(self, x):
+        """
+        Dimension of representation is twice hidden size, since we're
+        using forwards and backwards LSTM pass...
+        """
         xrep, (h_n, c_n) = self.embedding(x)
-        #xrep = xrep.contiguous().view(-1, self.hidden)
-        #xrep = xrep[inputmask]
+        xrep = torch.cat([xrep[:,0,:], xrep[:,-1,:]],1)  # here
         xrep = nn.ReLU6()(xrep)
-    #
         return xrep
 
 
