@@ -218,8 +218,9 @@ def _conditional_weibull_loss(model, x, t, e, elbo=True, risk='1'):
   lossf = torch.stack(lossf, dim=1)
 
   if elbo:
-
+    
     lossg = nn.Softmax(dim=1)(logits)
+    print(lossg.shape, lossf.shape)
     losss = lossg*losss
     lossf = lossg*lossf
     losss = losss.sum(dim=1)
