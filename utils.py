@@ -125,21 +125,10 @@ class SurvivalClusteringMachine(nn.Module):
 
         self.k = k
         self.dist = dist
-        self.temp = float(temp)
         self.discount = float(discount)
         self.optimizer = optimizer
         self.risks = risks
         self.hidden = hidden
-
-        if layers is None:
-            layers = []
-        self.layers = layers
-
-
-        if len(layers) == 0:
-            lastdim = hidden
-        else:
-            lastdim = layers[-1]
 
         self.embedding = nn.LSTM(inputdim, hidden, lstm_layers,
                                 batch_first=True)
@@ -170,7 +159,7 @@ class SurvivalClusteringMachine(nn.Module):
         using forwards and backwards LSTM pass...
         """
         xrep, (h_n, c_n) = self.embedding(x)
-        xrep = torch.cat([xrep[:,0,:], xrep[:,-1,:]],1)  # here
+        #xrep = torch.cat([xrep[:,0,:], xrep[:,-1,:]],1)  # here
         xrep = nn.ReLU6()(xrep)
         return xrep
 
@@ -315,6 +304,8 @@ def pretrain_dsm(model, t_train, e_train, t_valid, e_valid,
     oldcost = costs[-1]
 
   return premodel
+
+
 
 
 
